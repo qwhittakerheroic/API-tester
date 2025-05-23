@@ -1,3 +1,0 @@
-# Ignore sensitive files and environment files
-*.env
-api_tester.php 
