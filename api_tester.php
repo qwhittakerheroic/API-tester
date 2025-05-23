@@ -80,35 +80,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     curl_close($ch);
 }
 
+// Data overview logic
+$records_found = null;
+$critical_breaches = 0;
+$total_breaches = 0;
+if (isset($responseData['data']) && is_array($responseData['data'])) {
+    $total_breaches = count($responseData['data']);
+    foreach ($responseData['data'] as $item) {
+        if (
+            (isset($item['breach_details']['severity']) && strtolower($item['breach_details']['severity']) === 'high') ||
+            (isset($item['severity']) && strtolower($item['severity']) === 'high')
+        ) {
+            $critical_breaches++;
+        }
+    }
+} elseif (is_array($responseData) && isset($responseData[0])) {
+    $total_breaches = count($responseData);
+}
+
 // Read the PHP code for the code viewer tab
 $phpCode = file_get_contents(__FILE__);
-
-// Basic PHP example for the 'Basic PHP' tab
-$basicPhpCode = <<<'EOPHP'
-<?php
-$apiKey = 'YOUR_API_KEY';
-$type = 'email_domain';
-$account = 'example.com';
-$url = "https://api.heroic.com/v7/breach-search?type=$type&account=$account";
-
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'x-api-key: ' . $apiKey
-]);
-
-$response = curl_exec($ch);
-
-if ($response === false) {
-    echo 'Error: ' . curl_error($ch);
-} else {
-    $data = json_decode($response, true);
-    echo '<pre>' . htmlspecialchars(json_encode($data, JSON_PRETTY_PRINT)) . '</pre>';
-}
-curl_close($ch);
-?>
-EOPHP;
 ?>
 
 <!DOCTYPE html>
@@ -309,16 +300,24 @@ EOPHP;
             font-size: 1em;
         }
         .code-section {
-            margin: 16px 18px 0 18px;
-            background: #fff;
-            border: 1px solid #ddd;
-            padding: 8px 12px 8px 12px;
-            color: #222;
-            font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
-            font-size: 0.97em;
-            overflow-x: auto;
-            white-space: pre;
-            min-height: 300px;
+            font-family: inherit;
+            font-size: 0.96em;
+            line-height: 1.3;
+            max-width: 800px;
+            padding: 4px 8px 4px 8px;
+        }
+        .code-section h2, .code-section h3 {
+            margin-top: 10px;
+            margin-bottom: 6px;
+            font-size: 1em;
+        }
+        .code-section ul, .code-section pre, .code-section p {
+            margin-top: 4px;
+            margin-bottom: 8px;
+        }
+        .code-section pre {
+            font-size: 0.95em;
+            padding: 4px 6px;
         }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -375,11 +374,11 @@ EOPHP;
     // Tab switching
     function showTab(tab) {
         document.getElementById('tab-api').classList.remove('active');
+        document.getElementById('tab-docs').classList.remove('active');
         document.getElementById('tab-code').classList.remove('active');
-        document.getElementById('tab-basic').classList.remove('active');
         document.getElementById('tabcontent-api').classList.remove('active');
+        document.getElementById('tabcontent-docs').classList.remove('active');
         document.getElementById('tabcontent-code').classList.remove('active');
-        document.getElementById('tabcontent-basic').classList.remove('active');
         document.getElementById('tab-' + tab).classList.add('active');
         document.getElementById('tabcontent-' + tab).classList.add('active');
     }
@@ -412,8 +411,8 @@ EOPHP;
         <h1>HEROIC</h1>
         <div class="nav">
             <button id="tab-api" class="active" onclick="showTab('api')">API Tester</button>
+            <button id="tab-docs" onclick="showTab('docs')">Documentation</button>
             <button id="tab-code" onclick="showTab('code')">PHP Code</button>
-            <button id="tab-basic" onclick="showTab('basic')">Basic PHP</button>
         </div>
     </div>
     <div class="main">
@@ -486,7 +485,7 @@ EOPHP;
                         <?php endif; ?>
                     </div>
                 </div>
-                <div class="sort-row">
+                <div class="sort-row" style="margin-top:8px;">
                     <label for="sort_by">Sort by:</label>
                     <form method="post" style="display:inline;" onsubmit="saveFormToStorage()">
                         <select name="sort_by" id="sort_by" onchange="this.form.submit()">
@@ -513,14 +512,54 @@ EOPHP;
                 <div class="error"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
         </div>
+        <div id="tabcontent-docs" class="tab-content">
+            <div class="code-section">
+                <h2>Build Your Own HEROIC API Tool</h2>
+                <p>This page is for developers who want to build their own integrations or tools using the HEROIC API. Below you'll find the essentials for authenticating, making requests, and handling responses in your own code.</p>
+                <h3>Quick Start</h3>
+                <pre>1. Get your API key from your HEROIC account.
+2. Make HTTP requests to the HEROIC API endpoints with your API key in the <b>x-api-key</b> header.
+3. Parse the JSON response in your application.
+</pre>
+                <h3>Authentication</h3>
+                <pre>Header: x-api-key: YOUR_API_KEY</pre>
+                <h3>Making Requests</h3>
+                <pre># Search for breaches by email, domain, etc.
+GET https://api.heroic.com/v7/breach-search?type=email&account=user@domain.com
+
+# Get all breaches
+GET https://api.heroic.com/v7/breaches
+
+# Get breach details by UUID
+GET https://api.heroic.com/v7/breaches/{uuid}
+</pre>
+                <h3>Example: PHP (cURL)</h3>
+                <pre>$apiKey = 'YOUR_API_KEY';
+$url = 'https://api.heroic.com/v7/breach-search?type=email&account=user@domain.com';
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'x-api-key: ' . $apiKey
+]);
+$response = curl_exec($ch);
+$data = json_decode($response, true);
+curl_close($ch);
+</pre>
+                <h3>Best Practices</h3>
+                <ul>
+                    <li>Always keep your API key secure. Never expose it in public code repositories.</li>
+                    <li>Handle errors and check for HTTP status codes in your integration.</li>
+                    <li>Paginate results if you expect large datasets (use <b>number_of_records</b> and <b>pagination_token</b> if supported).</li>
+                    <li>Cache results where possible to avoid unnecessary API calls.</li>
+                </ul>
+                <h3>More Info</h3>
+                <p>For full API reference, see <a href="https://doc.api.heroic.com" target="_blank">https://doc.api.heroic.com</a></p>
+            </div>
+        </div>
         <div id="tabcontent-code" class="tab-content">
             <div class="code-section">
                 <?= htmlspecialchars($phpCode) ?>
-            </div>
-        </div>
-        <div id="tabcontent-basic" class="tab-content">
-            <div class="code-section">
-                <?= htmlspecialchars($basicPhpCode) ?>
             </div>
         </div>
     </div>
